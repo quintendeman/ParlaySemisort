@@ -17,17 +17,38 @@ bool semisorted(parlay::sequence<int> records) {
     return true;
 }
 
-TEST(EulerTourTreeSuite, stress_test) {
+TEST(SemisortSuite, parallel_correctness_test) {
     // Test parameters
     int input_size = 100;
     int min_value = 0;
     int max_value = 10;
 
-    // Generate a random sequence of ints and call our semisort function
+    // Generate a random sequence of ints and call the semisort function
     parlay::sequence<int> input(input_size);
     for (int i = 0; i < input.size(); i++)
         input[i] = min_value+(rand()%(max_value-min_value));
     parlay::sequence<int> output = semisort(input);
+
+    // Check that the results are in semisorted order
+    std::cout << "[";
+    for (auto record : output)
+        std::cout << record << ",";
+    std::cout << "]" << std::endl;
+    if (!semisorted(output))
+        FAIL();
+}
+
+TEST(SemisortSuite, sequential_correctness_test) {
+    // Test parameters
+    int input_size = 100;
+    int min_value = 0;
+    int max_value = 10;
+
+    // Generate a random sequence of ints and call the semisort function
+    parlay::sequence<int> input(input_size);
+    for (int i = 0; i < input.size(); i++)
+        input[i] = min_value+(rand()%(max_value-min_value));
+    parlay::sequence<int> output = sequential_semisort(input);
 
     // Check that the results are in semisorted order
     std::cout << "[";
