@@ -22,9 +22,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
+FetchContent_Declare(
+  xxhash
+  GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+  GIT_TAG        v0.8.0
+)
+FetchContent_MakeAvailable(xxHash)
+add_subdirectory(
+  "${xxhash_SOURCE_DIR}/cmake_unofficial"
+  "${xxhash_BINARY_DIR}"
+  EXCLUDE_FROM_ALL
+)
+
 add_executable(semisort_tests
   test/test_runner.cpp
   test/semisort_tests.cpp
   src/semisort.cpp
 )
-target_link_libraries(semisort_tests PRIVATE parlay GTest::gtest_main)
+target_link_libraries(semisort_tests PRIVATE parlay GTest::gtest_main xxhash)

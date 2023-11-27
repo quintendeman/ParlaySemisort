@@ -27,7 +27,7 @@ TEST(SemisortSuite, parallel_correctness_test) {
     parlay::sequence<int> input(input_size);
     for (int i = 0; i < input.size(); i++)
         input[i] = min_value+(rand()%(max_value-min_value));
-    parlay::sequence<int> output = semisort(input);
+    parlay::sequence<int> output = parallel_semisort(input);
 
     // Check that the results are in semisorted order
     std::cout << "[";
