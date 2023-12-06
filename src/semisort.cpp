@@ -55,13 +55,13 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     std::cout << "ALLOCATED HEAVY BUCKETS SUCCESFULLY!" << std::endl;
 
     // Allocate light key buckets
-    long num_light_buckets = 65536; //256; // 2^16
-    long long bucket_range = 281474976710656; //72057594037927940; // 2^64/2^16 = 2^48
+    long num_light_buckets = 65536/16; //256; // 2^16
+    long long bucket_range = 281474976710656*16; //72057594037927940; // 2^64/2^16 = 2^48
     parlay::sequence<int> num_light_keys_prefix = parlay::scan_inclusive(light_bitmap);
     parlay::sequence<int> light_bucket_sizes(sample.size());
     parlay::sequence<bool> light_key_range_end_bitmap(sample.size());
     parlay::parallel_for(0, sample.size(), [&] (size_t i) {
-        light_key_range_end_bitmap[i] = (i == sample.size()-1 || sample[i]%bucket_range != sample[i+1]%bucket_range);
+        light_key_range_end_bitmap[i] = (i == sample.size()-1 || sample[i]/bucket_range != sample[i+1]/bucket_range);
     });
     parlay::sequence<long> filtered_sample = parlay::pack(sample, light_key_range_end_bitmap);
     parlay::sequence<int> filtered_sizes = parlay::pack(num_light_keys_prefix, light_key_range_end_bitmap);
@@ -70,7 +70,6 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
         long bucket_id = filtered_sample[i]/bucket_range;
         int s = (i==0) ? filtered_sizes[i] : filtered_sizes[i]-filtered_sizes[i-1];
         size_t size = (size_t)(alpha * (s + c*log2(n) + sqrt(c*c*log2(n)*log2(n)+2*s*c*log2(n)))*probability);
-        std::cout << "Allocating light bucket with key: " << bucket_id << " size: " << size << std::endl;
         light_buckets[bucket_id] = (std::atomic<int>*) malloc((sizeof(std:: atomic<int>))*size);
     }
     std::cout << "ALLOCATED LIGHT BUCKETS SUCCESFULLY!" << std::endl;

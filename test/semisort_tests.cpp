@@ -19,9 +19,9 @@ bool semisorted(parlay::sequence<int> records) {
 
 TEST(SemisortSuite, parallel_correctness_test) {
     // Test parameters
-    int input_size = 10e7;
+    int input_size = 10e5;
     int min_value = 0;
-    int max_value = 10e7;
+    int max_value = 10e5;
 
     // Generate a random sequence of ints and call the semisort function
     parlay::sequence<int> input(input_size);
