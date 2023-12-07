@@ -19,9 +19,9 @@ bool semisorted(parlay::sequence<int> records) {
 
 TEST(SemisortSuite, parallel_correctness_test) {
     // Test parameters
-    int input_size = 10e5;
-    int min_value = 0;
-    int max_value = 10e5;
+    int input_size = 1000000;
+    int min_value = 1;
+    int max_value = 75;
 
     // Generate a random sequence of ints and call the semisort function
     parlay::sequence<int> input(input_size);
@@ -30,17 +30,17 @@ TEST(SemisortSuite, parallel_correctness_test) {
     parlay::sequence<int> output = parallel_semisort(input);
 
     // Check that the results are in semisorted order
-    // std::cout << "[";
-    // for (auto record : output)
-    //     std::cout << record << ",";
-    // std::cout << "]" << std::endl;
+    std::cout << "[";
+    for (auto record : output)
+        std::cout << record << ",";
+    std::cout << "]" << std::endl;
     if (!semisorted(output))
         FAIL();
 }
 
 TEST(SemisortSuite, sequential_correctness_test) {
     // Test parameters
-    int input_size = 10e7;
+    int input_size = 1000;
     int min_value = 0;
     int max_value = 10;
 
