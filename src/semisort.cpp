@@ -51,7 +51,7 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
         int s = (i==0) ? offsets[i] : offsets[i]-offsets[i-1];
         if (s > heavy_threshold) { 
             // std::cout << "ADDED HEAVY KEY: " << " HASH=" << sample[offsets[i]-1] << " SIZE=" << s << std::endl; 
-            std::cout << "ADDED HEAVY KEY: " << i << " " << offsets[i] << " " << offsets[i-1] << " WITH SIZE: " << s << std::endl; 
+            // std::cout << "ADDED HEAVY KEY: " << i << " " << offsets[i] << " " << offsets[i-1] << " WITH SIZE: " << s << std::endl; 
             heavy_keys[sample[offsets[i] - 1]] = nullptr;
         }
     } 
@@ -96,11 +96,13 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     // count number of keys from the sample that fall into each bucket
     parlay::sequence<long> filtered_light_sample = parlay::pack(sample, light_bitmap);
     std::map<long, int> light_bucket_counts;
-    parlay::parallel_for(0, filtered_light_sample.size(), [&] (size_t i) {
+    // parlay::parallel_for(0, filtered_light_sample.size(), [&] (size_t i) {
+    for (int i = 0; i < filtered_light_sample.size(); i++) {
         long bucket_id = filtered_light_sample[i]/bucket_range; // bucket_id is between 0 and num_buckets-1
-        std::cout << "BUCKET ID: " << bucket_id << " WITH FILTERED LIGHT SAMPLE: " << filtered_light_sample[i] << std::endl;
+        // std::cout << "BUCKET ID: " << bucket_id << " WITH FILTERED LIGHT SAMPLE: " << filtered_light_sample[i] << std::endl;
         light_bucket_counts[bucket_id]++;
-    });
+    }
+    //});
 
     std::cout << "PART 3: Counted light buckets: " << num_buckets << std::endl;
 
@@ -110,12 +112,12 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
         if (light_bucket_counts[bucket_id] == 0) { 
             light_buckets[bucket_id] = (std::atomic<int>*) malloc((sizeof(std:: atomic<int>)) * default_size);
             light_bucket_allocated_sizes[bucket_id] = default_size; 
-            std::cout << "USED HEAVY THRESHOLD FOR BUCKET: " << bucket_id << " WITH SIZE: " << default_size << std::endl;
+            // std::cout << "USED HEAVY THRESHOLD FOR BUCKET: " << bucket_id << " WITH SIZE: " << default_size << std::endl;
         } else { 
             size_t size = (size_t)(alpha * (light_bucket_counts[bucket_id] + c*log2(records.size()) + sqrt(c*c*log2(records.size())*log2(records.size())+2*light_bucket_counts[bucket_id]*c*log2(records.size())))*probability);
             light_buckets[bucket_id] = (std::atomic<int>*) malloc((sizeof(std:: atomic<int>)) * size);
             light_bucket_allocated_sizes[bucket_id] = size; 
-            std::cout << "USED SIZE: " << size << " FOR BUCKET: " << bucket_id << std::endl;
+            // std::cout << "USED SIZE: " << size << " FOR BUCKET: " << bucket_id << std::endl;
         }
     }
 
@@ -125,20 +127,18 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
 
     // Parallel loop through all original records and insert into appropriate heavy array or light bucket with CAS
     int expected = 0;
-    // parlay::parallel_for(0, n, [&] (size_t i) {
-    for (int i = 0; i < n; i++) {
+    parlay::parallel_for(0, n, [&] (size_t i) {
         if(heavy_keys.find(hashed_keys[i]) != heavy_keys.end()) {
             int k = 0;
             while(!heavy_keys[hashed_keys[i]][k].compare_exchange_strong(expected, records[i])) k++;
-            std::cout << "ADDED TO HEAVY BUCKET: " << hashed_keys[i] << " WITH VALUE: " << records[i] << std::endl;
+            // std::cout << "ADDED TO HEAVY BUCKET: " << hashed_keys[i] << " WITH VALUE: " << records[i] << std::endl;
         } else {
             int k = 0;
             long bucket_id = hashed_keys[i]/bucket_range;
-            std::cout << "TRYING TO ADD TO LIGHT BUCKET: " << bucket_id << " WITH VALUE: " << records[i] << std::endl;
+            // std::cout << "TRYING TO ADD TO LIGHT BUCKET: " << bucket_id << " WITH VALUE: " << records[i] << std::endl;
             while(!light_buckets[bucket_id][k].compare_exchange_strong(expected, records[i])) k++;
         }
-    }
-    // });
+    });
 
     std::cout << "ADDED VALUES TO LIGHT AND HEAVY BUCKETS!" << std::endl; 
 
@@ -172,14 +172,14 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     // are able to combine the heavy key sequences with the light key sequences)   
     for (auto key: heavy_keys) { 
         // separator for each bucket (-------------------)
-        std::cout << "---------- NEW HEAVY BUCKET " << key.first << " ---------" << std::endl;
+        // std::cout << "---------- NEW HEAVY BUCKET " << key.first << " ---------" << std::endl;
         parlay::sequence<int> bucket((heavy_bucket_allocated_sizes[key.first]));
         parlay::parallel_for(0, bucket.size(), [&] (size_t i) { 
             // std::cout << "COPYING: " << heavy_keys[key.first][i] << std::endl;
             bucket[i] = (int) heavy_keys[key.first][i].load(std::memory_order_relaxed);
         });
         if (bucket.size() > 0) { 
-            std::cout << "HEAVY VALUE: " << bucket[0] << std::endl; 
+            // std::cout << "HEAVY VALUE: " << bucket[0] << std::endl; 
             full_buckets_range.push_back(bucket);
         }  
     }
@@ -198,11 +198,11 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     parlay::sequence<int> filtered_semisorted_records = parlay::pack(semisorted_records, semisorted_bitmap); // pack the semisorted records
 
     // print out the semisorted records
-    std::cout << "SEMI-SORTED RECORDS: " << std::endl;
-    for (int i = 0; i < filtered_semisorted_records.size(); i++) { 
-        std::cout << filtered_semisorted_records[i] << " "; 
-    }
-    std::cout << std::endl;
+    // std::cout << "SEMI-SORTED RECORDS: " << std::endl;
+    // for (int i = 0; i < filtered_semisorted_records.size(); i++) { 
+    //     std::cout << filtered_semisorted_records[i] << " "; 
+    // }
+    // std::cout << std::endl;
 
     std::cout << "RETURNING SEMISORTED RECORDS!" << std::endl;
 
