@@ -74,22 +74,21 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     /**  HANDLE LIGHT BUCKETS  **/
 
     long num_buckets = 65536;  // n / (log2(n) * log2(n)); // O(n/log^2(n)) buckets
-    long min_hash = -9223372036854775807; 
-    long max_hash = 9223372036854775807; 
+    long min_hash = -72057594037927940*64; // -9223372036854775808; // -2^63
+    long max_hash = 72057594037927940*64; // 9223372036854775807; // 2^63 - 1
     long bucket_range = max_hash / num_buckets * 2; // range of each bucket
-    long default_size = (int) (log2(n) * log2(n)); // default size of each bucket
 
-    std::cout << "PART 1: NUM BUCKETS: " << num_buckets << " DEFAULT SIZE: " << default_size << std::endl;
+    std::cout << "PART 1: NUM BUCKETS: " << num_buckets << std::endl;
 
     std::map<long, std::atomic<int>*> light_buckets; 
     std::map<long, int> light_bucket_allocated_sizes;
 
     // Initialize light buckets
-    for (int i = 0; i < num_buckets; i++) {
-        long bucket_id = i + min_hash / bucket_range; // (min_hash + i * bucket_range) / bucket_range; 
+    parlay::parallel_for(0, num_buckets, [&] (size_t i) {
+        long bucket_id = i + min_hash / bucket_range; 
         light_buckets[bucket_id] = nullptr;
         light_bucket_allocated_sizes[bucket_id] = 0; 
-    }
+    });
 
     std::cout << "PART 2: Initialized: " << num_buckets << std::endl;
 
@@ -102,20 +101,16 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
         light_bucket_counts[bucket_id]++;
     });
 
-    std::cout << "PART 3: Counted light buckets: " << num_buckets << std::endl;
-
     // allocate light buckets - if there are no keys in the bucket, then we allocate a bucket of size heavy_threshold
     for (int i = 0; i < num_buckets; i++) { 
-        long bucket_id = i + min_hash / bucket_range; // (min_hash + i*bucket_range) / bucket_range;
+        long bucket_id = (min_hash + i*bucket_range) / bucket_range;
         if (light_bucket_counts[bucket_id] == 0) { 
-            light_buckets[bucket_id] = (std::atomic<int>*) malloc((sizeof(std:: atomic<int>)) * default_size);
-            light_bucket_allocated_sizes[bucket_id] = default_size; 
-            std::cout << "USED HEAVY THRESHOLD FOR BUCKET: " << bucket_id << " WITH SIZE: " << default_size << std::endl;
+            light_buckets[bucket_id] = (std::atomic<int>*) malloc((sizeof(std:: atomic<int>)) * heavy_threshold);
+            light_bucket_allocated_sizes[bucket_id] = heavy_threshold; 
         } else { 
-            size_t size = (size_t)(alpha * (light_bucket_counts[bucket_id] + c*log2(records.size()) + sqrt(c*c*log2(records.size())*log2(records.size())+2*light_bucket_counts[bucket_id]*c*log2(records.size())))*probability);
+            size_t size = (size_t)(alpha * (light_bucket_counts[i] + c*log2(records.size()) + sqrt(c*c*log2(records.size())*log2(records.size())+2*light_bucket_counts[i]*c*log2(records.size())))*probability);
             light_buckets[bucket_id] = (std::atomic<int>*) malloc((sizeof(std:: atomic<int>)) * size);
             light_bucket_allocated_sizes[bucket_id] = size; 
-            std::cout << "USED SIZE: " << size << " FOR BUCKET: " << bucket_id << std::endl;
         }
     }
 
@@ -148,15 +143,12 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     std::vector<parlay::sequence<int>> full_buckets_range;
     
     for (auto key: light_buckets) {
-        // std::cout << "---------- NEW LIGHT BUCKET " << key.first << " ---------" << std::endl;
         parlay::sequence<int> bucket(light_bucket_allocated_sizes[key.first]);
         parlay::parallel_for(0, bucket.size(), [&] (size_t i) {
             bucket[i] = (int)light_buckets[key.first][i].load(std::memory_order_relaxed);
         });
-        if (bucket.size() > 0) { 
-            // std::cout << "LIGHT VALUE: " << bucket[0] << std::endl; 
-            full_buckets_range.push_back(bucket);
-        }
+        bucket = parlay::filter(bucket, [&](int i) {return bucket[i] == 0;}); 
+        full_buckets_range.push_back(bucket);
     }
     
     std::cout << "CONVERTED LIGHT KEYS!" << std::endl;
@@ -172,14 +164,14 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     // are able to combine the heavy key sequences with the light key sequences)   
     for (auto key: heavy_keys) { 
         // separator for each bucket (-------------------)
-        std::cout << "---------- NEW HEAVY BUCKET " << key.first << " ---------" << std::endl;
+        // std::cout << "---------- NEW BUCKET " << key.first << " ---------" << std::endl;
         parlay::sequence<int> bucket((heavy_bucket_allocated_sizes[key.first]));
         parlay::parallel_for(0, bucket.size(), [&] (size_t i) { 
             // std::cout << "COPYING: " << heavy_keys[key.first][i] << std::endl;
             bucket[i] = (int) heavy_keys[key.first][i].load(std::memory_order_relaxed);
         });
         if (bucket.size() > 0) { 
-            std::cout << "HEAVY VALUE: " << bucket[0] << std::endl; 
+            // std::cout << "VALUE: " << bucket[0] << std::endl; 
             full_buckets_range.push_back(bucket);
         }  
     }
@@ -188,25 +180,23 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
 
     // parlay flatten - takes a list of parlay sequences and then combine them 
     parlay::sequence<int> semisorted_records = parlay::flatten(full_buckets_range); 
-    
+
     // filter out all 0s - i can't get this to work with parlay::filter  
     parlay::sequence<bool> semisorted_bitmap(semisorted_records.size());
     parlay::parallel_for(0, semisorted_records.size(), [&] (size_t i) {
         semisorted_bitmap[i] = (semisorted_records[i] != 0); // filter out all 0s
     });
 
-    parlay::sequence<int> filtered_semisorted_records = parlay::pack(semisorted_records, semisorted_bitmap); // pack the semisorted records
+    semisorted_records = parlay::pack(semisorted_records, semisorted_bitmap); // pack the semisorted records
 
     // print out the semisorted records
     std::cout << "SEMI-SORTED RECORDS: " << std::endl;
-    for (int i = 0; i < filtered_semisorted_records.size(); i++) { 
-        std::cout << filtered_semisorted_records[i] << " "; 
+    for (int i = 0; i < semisorted_records.size(); i++) { 
+        std::cout << semisorted_records[i] << " "; 
     }
     std::cout << std::endl;
 
-    std::cout << "RETURNING SEMISORTED RECORDS!" << std::endl;
-
-    return filtered_semisorted_records;
+    return semisorted_records;
 }
 
 parlay::sequence<int> sequential_semisort(parlay::sequence<int> records) {

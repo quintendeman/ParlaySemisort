@@ -21,7 +21,7 @@ TEST(SemisortSuite, parallel_correctness_test) {
     // Test parameters
     int input_size = 1000000;
     int min_value = 1;
-    int max_value = 75;
+    int max_value = 1000;
 
     // Generate a random sequence of ints and call the semisort function
     parlay::sequence<int> input(input_size);
