@@ -11,6 +11,9 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
 
     long seed = time(0);
     int n = records.size();
+
+    // create internal timer 
+    parlay::internal::timer t("Time"); 
     
     parlay::random_generator generator(seed);
     int probability = log2(n);
@@ -44,6 +47,8 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
 
     parlay::sequence<int> offsets = filter(key_sizes, [&](int i) {return key_sizes[i] != 0;});
 
+    t.next("Hashing Keys + Sampling + Partitioning into Light and Heavy Keys");
+
     /** HANDLE HEAVY BUCKETS **/
 
     std::map<long,std::atomic<int>*> heavy_keys;
@@ -70,6 +75,7 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
         // std::cout << "ALLOCATING HEAVY BUCKETS..." << std::endl;
     }
     std::cout << "ALLOCATED HEAVY BUCKETS SUCCESFULLY!" << std::endl;
+    t.next("Allocating Heavy Buckets");
 
     /**  HANDLE LIGHT BUCKETS  **/
 
@@ -122,6 +128,7 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     }
 
     std::cout << "ALLOCATED LIGHT BUCKETS SUCCESFULLY!" << std::endl;
+    t.next("Allocating Light Buckets");
 
     /** INSERT INTO BUCKETS  **/
 
@@ -131,16 +138,15 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
         if(heavy_keys.find(hashed_keys[i]) != heavy_keys.end()) {
             int k = 0;
             while(!heavy_keys[hashed_keys[i]][k].compare_exchange_strong(expected, records[i])) k++;
-            // std::cout << "ADDED TO HEAVY BUCKET: " << hashed_keys[i] << " WITH VALUE: " << records[i] << std::endl;
         } else {
             int k = 0;
             long bucket_id = hashed_keys[i]/bucket_range;
-            // std::cout << "TRYING TO ADD TO LIGHT BUCKET: " << bucket_id << " WITH VALUE: " << records[i] << std::endl;
             while(!light_buckets[bucket_id][k].compare_exchange_strong(expected, records[i])) k++;
         }
     });
 
     std::cout << "ADDED VALUES TO LIGHT AND HEAVY BUCKETS!" << std::endl; 
+    t.next("Inserting into Buckets");
 
     /** SEMISORT BUCKETS AND COMBINE  **/
 
@@ -185,6 +191,7 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     }
 
     std::cout << "HEAVY KEYS ADDED" << std::endl; 
+    t.next("Semisorting Buckets (adding light and heavy keys and sorting)");
 
     // parlay flatten - takes a list of parlay sequences and then combine them 
     parlay::sequence<int> semisorted_records = parlay::flatten(full_buckets_range); 
@@ -196,6 +203,7 @@ parlay::sequence<int> parallel_semisort(parlay::sequence<int> records) {
     });
 
     parlay::sequence<int> filtered_semisorted_records = parlay::pack(semisorted_records, semisorted_bitmap); // pack the semisorted records
+    t.next("Filtering out 0s");
 
     // print out the semisorted records
     // std::cout << "SEMI-SORTED RECORDS: " << std::endl;
