@@ -3,6 +3,32 @@
 #include "../include/semisort.h"
 
 
+TEST(SemisortSuite, parallel_speed_test) {
+    // Test parameters
+    long input_size = 10000000;
+    int min_value = 1;
+    int max_value = 1000;
+
+    // Generate a random sequence of ints and call the semisort function
+    parlay::sequence<int> input(input_size);
+    for (int i = 0; i < input.size(); i++)
+        input[i] = min_value+(rand()%(max_value-min_value));
+    parlay::sequence<int> output = parallel_semisort(input);
+}
+
+TEST(SemisortSuite, sequential_speed_test) {
+    // Test parameters
+    long input_size = 10000000;
+    int min_value = 1;
+    int max_value = 1000;
+
+    // Generate a random sequence of ints and call the semisort function
+    parlay::sequence<int> input(input_size);
+    for (int i = 0; i < input.size(); i++)
+        input[i] = min_value+(rand()%(max_value-min_value));
+    parlay::sequence<int> output = sequential_semisort(input);
+}
+
 bool semisorted(parlay::sequence<int> records) {
     int last = records[0];
     std::set<int> records_seen;
@@ -21,7 +47,7 @@ TEST(SemisortSuite, parallel_correctness_test) {
     // Test parameters
     long input_size = 10000000;
     int min_value = 1;
-    int max_value = 10000000;
+    int max_value = 1000;
 
     // Generate a random sequence of ints and call the semisort function
     parlay::sequence<int> input(input_size);
@@ -43,7 +69,7 @@ TEST(SemisortSuite, sequential_correctness_test) {
     // Test parameters
     long input_size = 10000000;
     int min_value = 1;
-    int max_value = 10000000;
+    int max_value = 1000;
 
     // Generate a random sequence of ints and call the semisort function
     parlay::sequence<int> input(input_size);
